@@ -245,7 +245,7 @@ details.fish summary::-webkit-details-marker { display: none; }
 :root { --nav-h: 58px; }
 .tabs {
   position: absolute; z-index: 1300; left: 0; right: 0; bottom: 0;
-  display: grid; grid-template-columns: repeat(4, 1fr);
+  display: grid; grid-template-columns: repeat(5, 1fr);
   background: var(--surface); border-top: 1px solid var(--line);
   padding-bottom: env(safe-area-inset-bottom, 0px);
   padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px);
@@ -448,3 +448,36 @@ body:not([data-tab="map"]) .layers { display: none; }
 
 .approx { font-size: 12.5px; color: var(--ink-2); background: var(--surface-2); border-left: 3px solid var(--r3); border-radius: 6px; padding: 6px 10px; }
 .pin.approx::before { border-style: dashed; }
+
+/* ---------- Клёв по часам ---------- */
+.besth { margin-bottom: 6px; }
+.besth b { font-variant-numeric: tabular-nums; }
+svg .hb { fill: var(--neutral); }
+svg .hb.r1 { fill: var(--r1); } svg .hb.r2 { fill: var(--r2); } svg .hb.r3 { fill: var(--r3); } svg .hb.r4 { fill: var(--r4); } svg .hb.r5 { fill: var(--r5); }
+svg .nowh { fill: var(--accent); opacity: .12; }
+
+/* ---------- Уловы на карте ---------- */
+.catchpin { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
+.catchpin svg { width: 15px; height: 15px; fill: #fff; }
+.catchpin.them { background: #7a3fa0; }
+.catchpin.mine { background: var(--accent); }
+.pop a { color: inherit; }
+.pop button.alt { margin-top: 6px; }
+
+/* ---------- Дневник ---------- */
+.dstats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.dstats div { background: var(--surface); border-radius: 14px; padding: 12px; display: grid; }
+.dstats b { font: 600 22px/1.1 var(--f-display); font-variant-numeric: tabular-nums; }
+.dstats small { color: var(--ink-2); font-size: 12px; }
+ul.dlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.ditem { background: var(--surface); border-radius: 14px; overflow: hidden; }
+.dph img { width: 100%; max-height: 240px; object-fit: cover; display: block; }
+.dmain { padding: 12px 14px; display: grid; gap: 3px; }
+.dmain small { color: var(--ink-2); font-size: 12.5px; }
+.dmain .dwx { color: var(--deep); }
+.dmain p { margin-top: 4px; }
+.dprev img { max-width: 100%; max-height: 220px; border-radius: 12px; display: block; }
+.row3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.row3 .fld span { font-size: 12px; }
+.filebtn { cursor: pointer; display: inline-flex; align-items: center; }
+.tabs button { font-size: 10.5px; }

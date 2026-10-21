@@ -57,21 +57,39 @@
 
   // ---------- Подложки: у каждой есть запасные источники ----------
   const ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services/";
+  const ESRI_T = (window.KK_CONFIG && KK_CONFIG.esriToken) ? "?token=" + encodeURIComponent(KK_CONFIG.esriToken) : "";
   const BASES = {
     scheme: { name: "Схема", src: [
-      { url: ESRI + "World_Street_Map/MapServer/tile/{z}/{y}/{x}", o: { maxZoom: 19, attribution: "© Esri, HERE, OpenStreetMap" } },
+      { url: ESRI + "World_Street_Map/MapServer/tile/{z}/{y}/{x}" + ESRI_T, o: { maxZoom: 19, attribution: "© Esri, HERE, OpenStreetMap" } },
       { url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png", o: { maxZoom: 19, attribution: "© OpenStreetMap" } },
       { url: "https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png", o: { subdomains: "abc", maxZoom: 19, attribution: "© OpenStreetMap France" } },
       { url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", o: { subdomains: "abcd", maxZoom: 19, attribution: "© OpenStreetMap, © CARTO" } }
     ] },
     topo: { name: "Рельеф", src: [
-      { url: ESRI + "World_Topo_Map/MapServer/tile/{z}/{y}/{x}", o: { maxZoom: 19, attribution: "© Esri" } },
+      { url: ESRI + "World_Topo_Map/MapServer/tile/{z}/{y}/{x}" + ESRI_T, o: { maxZoom: 19, attribution: "© Esri" } },
       { url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", o: { subdomains: "abc", maxZoom: 17, attribution: "© OpenTopoMap, © OpenStreetMap" } }
     ] },
     sat: { name: "Спутник", src: [
-      { url: ESRI + "World_Imagery/MapServer/tile/{z}/{y}/{x}", o: { maxZoom: 19, attribution: "© Esri" } }
-    ], labels: ESRI + "Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}" }
+      { url: ESRI + "World_Imagery/MapServer/tile/{z}/{y}/{x}" + ESRI_T, o: { maxZoom: 19, attribution: "© Esri" } }
+    ], labels: ESRI + "Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}" + ESRI_T }
   };
+  // Плитки карты: сначала ищем в сохранённых (офлайн), потом из сети
+  const TILE_CACHE = "kk-tiles-v1";
+  const hasCache = typeof caches !== "undefined";
+  L.TileLayer.Cached = L.TileLayer.extend({
+    createTile(coords, done) {
+      const tile = document.createElement("img");
+      L.DomEvent.on(tile, "load", L.Util.bind(this._tileOnLoad, this, done, tile));
+      L.DomEvent.on(tile, "error", L.Util.bind(this._tileOnError, this, done, tile));
+      tile.alt = ""; tile.setAttribute("role", "presentation");
+      const url = this.getTileUrl(coords);
+      if (!hasCache) { tile.src = url; return tile; }
+      caches.open(TILE_CACHE).then(c => c.match(url)).then(r => r ? r.blob() : null)
+        .then(b => { tile.src = b && b.size ? URL.createObjectURL(b) : url; })
+        .catch(() => { tile.src = url; });
+      return tile;
+    }
+  });
   let baseKey = store.get("kk_base") || "scheme";
   if (!BASES[baseKey]) baseKey = "scheme";
   let baseLayer = null, labelLayer = null, srcIdx = 0;
@@ -81,8 +99,8 @@
     if (baseLayer) map.removeLayer(baseLayer);
     if (labelLayer) { map.removeLayer(labelLayer); labelLayer = null; }
     const B = BASES[key], s = B.src[srcIdx];
-    baseLayer = L.tileLayer(s.url, Object.assign({ keepBuffer: 4, updateWhenZooming: false, crossOrigin: false }, s.o)).addTo(map);
-    if (B.labels) labelLayer = L.tileLayer(B.labels, { maxZoom: 19, pane: "overlayPane", opacity: .9 }).addTo(map);
+    baseLayer = new L.TileLayer.Cached(s.url, Object.assign({ keepBuffer: 4, updateWhenZooming: false }, s.o)).addTo(map);
+    if (B.labels) labelLayer = new L.TileLayer.Cached(B.labels, { maxZoom: 19, pane: "overlayPane", opacity: .9 }).addTo(map);
     // если источник не отвечает — переключаемся на запасной
     let ok = 0, bad = 0;
     const lay = baseLayer;
@@ -111,9 +129,37 @@
       make: () => L.tileLayer.wms("https://geoserver.openseamap.org/geoserver/gwc/service/wms", { layers: "gebco2021:gebco_2021", format: "image/png", transparent: true, version: "1.1.1", opacity: .65, attribution: "GEBCO" }) },
     seamark: { name: "Фарватеры, бакены, знаки", note: "Навигационные знаки OpenSeaMap: где судоходный ход и бровки.",
       make: () => L.tileLayer("https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png", { maxZoom: 18, minZoom: 9, attribution: "© OpenSeaMap" }) },
+    catches: { name: "Уловы рыбаков", note: "Отметки уловов с точными координатами из открытых отчётов рыбаков (fishing-report.ru, fishermap.org).", make: makeCatches },
+    mycatch: { name: "Мои уловы", note: "Записи из вашего дневника, у которых указано место.", make: () => (myCatchLayer = L.layerGroup(), drawMyCatches(), myCatchLayer) },
     pits: { name: "Зимовальные ямы (Двина, Вычегда)", note: "Глубокие ямы, где зимует рыба. Ловля на них запрещена с 1 октября до ледохода.", make: makePits }
   };
-  const overOn = new Set(store.get("kk_over") || ["pits"]);
+  const overOn = new Set(store.get("kk_over") || ["pits", "catches", "mycatch"]);
+  let myCatchLayer = null;
+  const hook = cls => L.divIcon({ className: "", html: `<div class="catchpin ${cls}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12c3-5 9-6 13-2l5-3v10l-5-3c-4 4-10 3-13-2Z"/></svg></div>`, iconSize: [24, 24], iconAnchor: [12, 12] });
+  function makeCatches() {
+    const g = L.layerGroup();
+    (window.CATCHES || []).forEach(c => {
+      const d = new Date(c.date).toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" });
+      L.marker([c.lat, c.lon], { icon: hook("them"), keyboard: false })
+        .bindPopup(`<div class="pop"><b>${c.f.map(f => FISH[f] ? FISH[f].n : f).join(", ")}</b><span>${esc(c.water)} · ${d}</span>${c.text ? `<span>${esc(c.text)}</span>` : ""}<small>${c.lat.toFixed(4)}, ${c.lon.toFixed(4)} · <a href="${c.url}" target="_blank" rel="noopener">${esc(c.src)}</a></small><button type="button" class="alt" data-go="${c.lat},${c.lon}">Прогноз в этой точке</button></div>`, { className: "kk-pop" })
+        .addTo(g);
+    });
+    return g;
+  }
+  function drawMyCatches() {
+    if (!myCatchLayer || !window.DIARY) return;
+    myCatchLayer.clearLayers();
+    DIARY.list().filter(e => e.lat && e.lon).forEach(e => {
+      const d = new Date(e.date).toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
+      L.marker([e.lat, e.lon], { icon: hook("mine"), keyboard: false })
+        .bindPopup(`<div class="pop"><b>${FISH[e.fish] ? FISH[e.fish].n : ""}${e.count > 1 ? " × " + e.count : ""}${e.weight ? ", " + String(e.weight).replace(".", ",") + " кг" : ""}</b><span>${d}${e.bait ? " · " + esc(e.bait) : ""}</span></div>`, { className: "kk-pop" })
+        .addTo(myCatchLayer);
+    });
+  }
+  map.on("popupopen", ev => {
+    const b = ev.popup.getElement().querySelector("[data-go]");
+    if (b) b.onclick = () => { const [la, lo] = b.dataset.go.split(",").map(Number); map.closePopup(); openCustom(la, lo); };
+  });
   const overLayers = {};
   function setOver(k, on) {
     if (on) { if (!overLayers[k]) overLayers[k] = OVER[k].make(); overLayers[k].addTo(map); overOn.add(k); }
@@ -137,6 +183,10 @@
     <div class="lpbase">${Object.entries(BASES).map(([k, b]) => `<label><input type="radio" name="base" value="${k}"${k === baseKey ? " checked" : ""}><span>${b.name}</span></label>`).join("")}</div>
     <h4>Глубины и вода</h4>
     ${Object.entries(OVER).map(([k, o]) => `<label class="lpover"><input type="checkbox" data-over="${k}"${overOn.has(k) ? " checked" : ""}><span><b>${o.name}</b><small>${o.note}</small></span></label>`).join("")}
+    <h4>Без интернета</h4>
+    <p class="hint">Сохраните карту района, где будете рыбачить: она откроется на льду без связи. Сохраняется то, что сейчас видно на экране, с приближением.</p>
+    <div class="acts"><button type="button" class="ghost" id="offSave">Сохранить этот район</button><button type="button" class="ghost danger" id="offClear">Удалить</button></div>
+    <p class="hint" id="offState"></p>
     <a class="ghost lpnav" href="https://webapp.navionics.com/" target="_blank" rel="noopener">Открыть карту глубин Navionics ›</a>
     <p class="hint">Navionics (Garmin) строит карты глубин по эхолотам, но они закрытые — их можно смотреть только в их приложении.</p>`;
   lp.querySelectorAll("[name=base]").forEach(r => r.onchange = () => setBase(r.value));
@@ -145,6 +195,57 @@
   $("#btnLayers").onclick = () => { lp.hidden = !lp.hidden; };
   map.on("movestart", () => { if (!lp.hidden && window.innerWidth < 900) lp.hidden = true; });
   overOn.forEach(k => OVER[k] && setOver(k, true));
+  // ---------- Офлайн-карта ----------
+  function tilesFor(bounds, z0, z1) {
+    const out = [];
+    for (let z = z0; z <= z1; z++) {
+      const a = map.project(bounds.getNorthWest(), z).divideBy(256).floor();
+      const b = map.project(bounds.getSouthEast(), z).divideBy(256).floor();
+      for (let x = a.x; x <= b.x; x++) for (let y = a.y; y <= b.y; y++) out.push({ x, y, z });
+    }
+    return out;
+  }
+  async function offlineInfo() {
+    const el = $("#offState");
+    if (!el) return;
+    if (!hasCache) { el.textContent = "На этом устройстве сохранение карт недоступно."; return; }
+    try { const keys = await (await caches.open(TILE_CACHE)).keys(); el.textContent = keys.length ? `Сохранено фрагментов карты: ${keys.length}.` : "Пока ничего не сохранено."; } catch (e) {}
+  }
+  $("#offSave").onclick = async () => {
+    const el = $("#offState"), btn = $("#offSave");
+    if (!hasCache) return offlineInfo();
+    const z = map.getZoom();
+    if (z < 8) { el.textContent = "Приблизьте карту до района рыбалки (сейчас видно слишком большую территорию)."; return; }
+    const layersToSave = [baseLayer].concat(labelLayer ? [labelLayer] : []);
+    let list = tilesFor(map.getBounds(), z, Math.min(z + 3, 16));
+    if (list.length > 1500) list = tilesFor(map.getBounds(), z, Math.min(z + 2, 16));
+    if (list.length > 1500) { el.textContent = "Слишком большой район — приблизьте карту ещё."; return; }
+    btn.disabled = true;
+    const c = await caches.open(TILE_CACHE);
+    let done = 0, fail = 0;
+    const jobs = [];
+    layersToSave.forEach(l => list.forEach(t => jobs.push(l.getTileUrl(Object.assign(L.point(t.x, t.y), { z: t.z })))));
+    const run = async () => {
+      while (jobs.length) {
+        const url = jobs.shift();
+        try {
+          if (!(await c.match(url))) {
+            const r = await fetch(url);
+            const b = r.ok ? await r.blob() : null;
+            if (b && b.size) await c.put(url, new Response(b, { headers: { "Content-Type": b.type || "image/png" } })); else fail++;
+          }
+        } catch (e) { fail++; }
+        done++;
+        if (done % 10 === 0) el.textContent = `Сохраняю… ${done} из ${done + jobs.length}`;
+      }
+    };
+    await Promise.all([run(), run(), run(), run(), run(), run()]);
+    btn.disabled = false;
+    el.textContent = fail > done / 2 ? "Не удалось сохранить: нет интернета или карта не отвечает." : `Готово: район сохранён (${done - fail} фрагментов). Без интернета он откроется на этом же виде карты.`;
+  };
+  $("#offClear").onclick = async () => { if (hasCache) { await caches.delete(TILE_CACHE); offlineInfo(); } };
+  $("#btnLayers").addEventListener("click", offlineInfo);
+
   window.__showDepth = (lat, lon) => { setOver("sonar", true); setOver("seamark", true); map.setView([lat, lon], 13); };
 
   const markers = {};
@@ -578,6 +679,7 @@
       <div class="acts">
         ${s.custom ? `<button type="button" id="saveCustom" class="primary">Сохранить в мои места</button>` : s.my ? `<button type="button" id="editMy" class="ghost">Изменить</button><button type="button" id="delMy" class="ghost danger">Удалить</button>` : `<button type="button" id="favBtn" class="ghost">${fav ? "★ В избранном" : "☆ В избранное"}</button>`}
         <button type="button" class="ghost" id="toRoute">Маршрут ↓</button>
+        ${s.custom ? "" : `<button type="button" class="ghost" id="addCatch">+ Улов</button>`}
       </div>`;
     body.appendChild(top);
     $("#back").onclick = () => { state.current = null; if (customMarker && s.custom) { map.removeLayer(customMarker); customMarker = null; } drawMarkers(); setSheet("list", false); renderList(); };
@@ -588,6 +690,7 @@
       dm.dataset.armed = "1"; dm.textContent = "Точно удалить?"; dm.classList.add("armed");
       setTimeout(() => { if (dm.isConnected) { delete dm.dataset.armed; dm.textContent = "Удалить"; dm.classList.remove("armed"); } }, 4000);
     };
+    const ac = $("#addCatch"); if (ac) ac.onclick = () => window.DIARY && DIARY.openForm({ spotId: s.id });
     $("#toRoute").onclick = () => { const r = body.querySelector(".route"); if (r) r.scrollIntoView({ behavior: "smooth", block: "start" }); };
     const fb = $("#favBtn");
     if (fb) fb.onclick = () => {
@@ -624,6 +727,9 @@
       <h4>Почему так</h4>
       <ul class="why">${reasons.map(w => `<li class="${w.good === true ? "g" : w.good === false ? "b" : "n"}">${esc(w.text)}</li>`).join("")}</ul>`;
     body.appendChild(v);
+
+    // Клёв по часам
+    body.appendChild(hourlyCard(day, prev));
 
     // Запреты и правила
     body.appendChild(rulesCard(s));
@@ -759,6 +865,27 @@
     return `<svg class="moonsvg" viewBox="0 0 60 60" width="60" height="60" aria-hidden="true"><circle cx="${cx}" cy="${cy}" r="${r}" class="mdark"/><path d="${d}" class="mlit"/></svg>`;
   }
 
+  // ---------------- Клёв по часам ----------------
+  function hourlyCard(day, prev) {
+    const c = el("section", "card");
+    const H = FC.hourly(day, prev);
+    if (!H.length) return c;
+    const best = FC.bestWindow(H);
+    const W = 312, Hh = 96, bw = W / 24;
+    const bars = H.map(h => {
+      const st = FC.stars(h.score), bh = Math.max(4, (h.score / 100) * (Hh - 22));
+      return `<rect x="${(h.hour * bw + 1).toFixed(1)}" y="${(Hh - 16 - bh).toFixed(1)}" width="${(bw - 2).toFixed(1)}" height="${bh.toFixed(1)}" rx="2" class="hb r${st}"><title>${String(h.hour).padStart(2, "0")}:00 — ${h.score}${h.why.length ? " (" + h.why.join(", ") + ")" : ""}</title></rect>`;
+    }).join("");
+    const labels = [0, 3, 6, 9, 12, 15, 18, 21].map(hh => `<text x="${(hh * bw + bw / 2).toFixed(1)}" y="${Hh - 3}" class="lbl" text-anchor="middle">${hh}</text>`).join("");
+    const nowH = new Date().getHours();
+    const isToday = state.day === 0;
+    c.innerHTML = `<h3>Клёв по часам</h3>
+      ${best ? `<p class="besth">Лучшее время: <b>${String(best.from).padStart(2, "0")}:00–${String(best.to).padStart(2, "0")}:00</b></p>` : ""}
+      <div class="chart"><svg viewBox="0 0 ${W} ${Hh}" role="img" aria-label="Оценка клёва по часам">${isToday ? `<rect x="${nowH * bw}" y="0" width="${bw}" height="${Hh - 14}" class="nowh"/>` : ""}${bars}${labels}</svg></div>
+      <p class="hint">Выше столбик — лучше клёв. Учтены зорьки, ночь, ветер, дождь и скачки давления в этот час.${isToday ? " Подсвечен текущий час." : ""}</p>`;
+    return c;
+  }
+
   // ---------------- Запреты в карточке места ----------------
   function rulesCard(s) {
     const c = el("section", "card rules");
@@ -888,12 +1015,22 @@
     const b = $("#btnRefresh"); b.classList.add("spin"); setTimeout(() => b.classList.remove("spin"), 1200); Object.keys(rcache).forEach(k => delete rcache[k]); state.tides = {}; await loadAll(true); refresh(); rerenderSheet(); };
 
 
-  window.APP = { openSpot, map, state, showMapTab: () => setTimeout(() => map.invalidateSize(), 50) };
+  window.APP = { openSpot, map, state, showMapTab: () => setTimeout(() => map.invalidateSize(), 50),
+    allSpots: ALL,
+    weatherFor: id => id === "custom" ? (state.custom && state.custom.days) : state.weather[id],
+    ratingFor: (id, d) => rating(id, d),
+    drawMyCatches: () => drawMyCatches(),
+    reloadMy: () => {
+      try { MY = JSON.parse(localStorage.getItem(MY_KEY)) || []; } catch (e) {}
+      state.favs = new Set(store.get("kk_favs") || []);
+      Object.keys(rcache).forEach(k => delete rcache[k]);
+      Promise.all(MY.map(ensureWeather)).then(() => { drawMarkers(); rerenderSheet(); });
+    } };
 
   // Старт
   renderDayBar();
   setSheet("list", false);
   drawMarkers();
   renderList();
-  loadAll(false).then(() => { refresh(); rerenderSheet(); });
+  loadAll(false).then(() => { refresh(); rerenderSheet(); if (window.DIARY) DIARY.schedule(); });
 })();

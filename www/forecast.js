@@ -217,7 +217,37 @@
     });
   }
 
-  const api = { moonInfo, sunTimes, parseWeather, dayScore, fishScore, spotDay, stars, verdict, bestTimes, tideEvents,
+  // Клёв по часам: оценка дня + зорьки, ночь, ветер, дождь и скачки давления в этот час
+  function hourly(day, prev) {
+    const base = dayScore(day, prev).score;
+    const sr = day.sunrise ? toMin(day.sunrise) : 360, ss = day.sunset ? toMin(day.sunset) : 1200;
+    const month = +day.date.slice(5, 7) - 1;
+    const hrs = day.hours || [];
+    return hrs.map((h, i) => {
+      const m = h.hour * 60 + 30;
+      let s = base;
+      const why = [];
+      if (m >= sr - 60 && m <= sr + 120) { s += 18; why.push("утренняя зорька"); }
+      else if (m >= ss - 120 && m <= ss + 30) { s += 16; why.push("вечерняя зорька"); }
+      else if (ss > sr && (m > ss + 60 || m < sr - 60)) { s -= 16; why.push("ночь"); }
+      else if (month >= 5 && month <= 7 && h.hour >= 11 && h.hour <= 15) { s -= 7; why.push("дневная жара"); }
+      if (h.w != null) { if (h.w > 8) { s -= 10; why.push("сильный ветер"); } else if (h.w >= 2 && h.w <= 5) s += 3; }
+      if (h.pr != null && h.pr > 1.5) { s -= 8; why.push("дождь"); }
+      const p3 = hrs[i - 3];
+      if (p3 && h.p != null && p3.p != null && Math.abs(h.p - p3.p) > 1.5) { s -= 6; why.push("скачок давления"); }
+      return { hour: h.hour, score: clamp(s), why };
+    });
+  }
+  function bestWindow(hours) {
+    let best = null;
+    for (let i = 0; i < hours.length - 1; i++) {
+      const a = (hours[i].score + hours[i + 1].score + (hours[i + 2] ? hours[i + 2].score : hours[i + 1].score)) / 3;
+      if (!best || a > best.a) best = { a, from: hours[i].hour, to: Math.min(24, hours[i].hour + 3) };
+    }
+    return best;
+  }
+
+  const api = { hourly, bestWindow, moonInfo, sunTimes, parseWeather, dayScore, fishScore, spotDay, stars, verdict, bestTimes, tideEvents,
     WMO, DIRS, DIRS_SHORT, dirIndex, HPA_TO_MM };
   root.FC = api;
   if (typeof module !== "undefined") module.exports = api;

@@ -7,7 +7,8 @@ const perms = [
   "android.permission.INTERNET",
   "android.permission.ACCESS_NETWORK_STATE",
   "android.permission.ACCESS_COARSE_LOCATION",
-  "android.permission.ACCESS_FINE_LOCATION"
+  "android.permission.ACCESS_FINE_LOCATION",
+  "android.permission.POST_NOTIFICATIONS"
 ];
 for (const p of perms) {
   if (!xml.includes(`"${p}"`)) {

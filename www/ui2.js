@@ -10,10 +10,13 @@
   function show(tab) {
     document.body.dataset.tab = tab;
     tabs.forEach(b => { const on = b.dataset.tab === tab; b.classList.toggle("on", on); b.setAttribute("aria-selected", on); });
-    ["fishScreen", "rulesScreen", "tipsScreen"].forEach(id => { const el = document.getElementById(id); const on = id === tab + "Screen"; if (on && el.hidden) { el.classList.remove("enter"); void el.offsetWidth; el.classList.add("enter"); } });
+    ["fishScreen", "rulesScreen", "tipsScreen", "diaryScreen"].forEach(id => { const el = document.getElementById(id); const on = id === tab + "Screen"; if (on && el.hidden) { el.classList.remove("enter"); void el.offsetWidth; el.classList.add("enter"); } });
     $("#fishScreen").hidden = tab !== "fish";
     $("#tipsScreen").hidden = tab !== "tips";
     $("#rulesScreen").hidden = tab !== "rules";
+    const ds = $("#diaryScreen"), wasHidden = ds.hidden;
+    ds.hidden = tab !== "diary";
+    if (tab === "diary" && wasHidden && window.DIARY && !ds.dataset.form) DIARY.render();
     if (tab === "rules") { const d = new Date().toDateString(); if ($("#rulesScreen").dataset.day !== d) { $("#rulesScreen").dataset.day = d; renderRules(); } }
     if (tab === "map" && window.APP) APP.showMapTab();
     if (tab === "fish" && !$("#fishScreen").dataset.ready) renderFishList();
