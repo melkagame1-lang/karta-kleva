@@ -14,7 +14,7 @@
     ryapushka: "Coregonus albula"
   };
   const OK_LIC = ["cc0", "cc-by", "cc-by-sa", "cc-by-nc", "cc-by-nc-sa", "cc-by-nd", "cc-by-nc-nd", "pd"];
-  const KEY = "kk_photo_v1_";
+  const KEY = "kk_photo_v2_";
   const TTL = 30 * 86400000;
   const mem = {};
 
@@ -38,7 +38,7 @@
     if (!photos.length && t.default_photo) photos = [t.default_photo];
     return photos
       .filter(p => p && OK_LIC.includes(String(p.license_code || "").toLowerCase()))
-      .slice(0, 5)
+      .slice(0, 1)
       .map(p => ({
         src: size(p.medium_url || p.url, "medium"),
         big: size(p.large_url || p.medium_url || p.url, "large"),
@@ -74,7 +74,7 @@
     let done = 0;
     for (const id of ids) {
       const list = await get(id);
-      await Promise.all(list.slice(0, 3).map(p => new Promise(res => { const im = new Image(); im.onload = im.onerror = res; im.src = p.src; })));
+      await Promise.all(list.slice(0, 1).map(p => new Promise(res => { const im = new Image(); im.onload = im.onerror = res; im.src = p.src; })));
       done++; if (onProgress) onProgress(done, ids.length);
     }
   }

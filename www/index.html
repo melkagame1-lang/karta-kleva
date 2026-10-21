@@ -27,14 +27,11 @@
   </div>
 
   <div class="fab">
-    <button type="button" id="btnZoomIn" class="big" aria-label="Приблизить">+</button>
-    <button type="button" id="btnZoomOut" class="big" aria-label="Отдалить">−</button>
-    <button type="button" id="btnMe" aria-label="Где я">Я</button>
-    <button type="button" id="btnLayer">Спутник</button>
-    <button type="button" id="btnDepth">Глубины</button>
-    <button type="button" id="btnList">Места</button>
-    <button type="button" id="btnRefresh" aria-label="Обновить погоду">↻</button>
+    <button type="button" id="btnMe" aria-label="Где я" title="Где я"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="7.5"/></svg></button>
+    <button type="button" id="btnLayers" aria-label="Слои карты и глубины" title="Слои и глубины"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 8l10 5 10-5-10-5Z"/><path d="m2 13 10 5 10-5"/><path d="m2 17.5 10 5 10-5" opacity=".5"/></svg></button>
+    <button type="button" id="btnRefresh" aria-label="Обновить погоду" title="Обновить погоду"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg></button>
   </div>
+  <div class="layers" id="layersPanel" hidden role="dialog" aria-label="Слои карты"></div>
 
   <section class="sheet" id="sheet" aria-label="Прогноз">
     <button type="button" class="handle" id="handle" aria-label="Развернуть или свернуть"><i></i></button>
@@ -56,6 +53,7 @@
 <script src="lib/leaflet.js"></script>
 <script src="basemap.js"></script>
 <script src="data.js"></script>
+<script src="pits.js"></script>
 <script src="forecast.js"></script>
 <script src="fishart.js"></script>
 <script src="photos.js"></script>

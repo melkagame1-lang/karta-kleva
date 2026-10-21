@@ -58,7 +58,17 @@
     "arh-vaga": ["netsSouth", "salmon", "license"],
     "arh-kotlas": ["netsSouth", "yamy", "dvinaNets"],
     "arh-mezen": ["netsNorth", "onegaMezenNets", "coast", "salmon", "license"],
-    "arh-solovki": ["seld", "coast"]
+    "arh-solovki": ["seld", "coast"],
+    "sev-paranikha": ["netsMid", "coast", "nets200"],
+    "sev-kudma": ["netsMid"],
+    "sev-kudmozero": ["netsMid"],
+    "sev-unskaya": ["navagaUna", "netsMid", "coast", "nets200", "salmon"],
+    "arh-suhoe": ["netsMid", "delta", "coast", "nets200"],
+    "arh-yuras": ["netsMid"],
+    "arh-vyselki": ["netsMid", "dvinaNets", "yamy"],
+    "arh-slobodskoe": ["netsMid"],
+    "arh-travnoe": ["netsMid"],
+    "arh-chidvozero": ["netsMid"]
   };
 
   // Минимальные размеры (см, от кончика рыла до основания средних лучей хвоста) — Архангельская область

@@ -38,46 +38,114 @@
     .fitBounds([[42, 20], [70, 165]]);
   map.attributionControl.setPrefix(false);
 
-  // Запасная карта без интернета: контуры России, озёра, реки
+  // Запасная карта без интернета: контуры России, озёра, реки (рисуется на canvas — быстро)
   map.createPane("base"); map.getPane("base").style.zIndex = 150;
   const css = getComputedStyle(document.documentElement);
   const tok = n => css.getPropertyValue(n).trim();
   function drawBasemap() {
     const B = window.BASEMAP; if (!B) return;
-    const flip = arr => arr.map(r => r.map(p => [p[1], p[0]]));
-    L.polygon(flip(B.other), { pane: "base", stroke: true, weight: 0.6, color: tok("--line"), fillColor: tok("--land-other"), fillOpacity: 1, interactive: false }).addTo(map);
-    L.polygon(flip(B.ru), { pane: "base", stroke: true, weight: 1, color: tok("--line"), fillColor: tok("--land"), fillOpacity: 1, interactive: false }).addTo(map);
-    L.polygon(flip(B.lakes), { pane: "base", stroke: false, fillColor: tok("--water-map"), fillOpacity: 1, interactive: false }).addTo(map);
-    L.polyline(flip(B.rivers), { pane: "base", weight: 1, color: tok("--water-map"), interactive: false }).addTo(map);
+    const r = L.canvas({ pane: "base", padding: .3 });
+    const flip = arr => arr.map(x => x.map(p => [p[1], p[0]]));
+    const o = { pane: "base", renderer: r, interactive: false, smoothFactor: 1.5 };
+    L.polygon(flip(B.other), Object.assign({ weight: .6, color: tok("--line"), fillColor: tok("--land-other"), fillOpacity: 1 }, o)).addTo(map);
+    L.polygon(flip(B.ru), Object.assign({ weight: 1, color: tok("--line"), fillColor: tok("--land"), fillOpacity: 1 }, o)).addTo(map);
+    L.polygon(flip(B.lakes), Object.assign({ stroke: false, fillColor: tok("--water-map"), fillOpacity: 1 }, o)).addTo(map);
+    L.polyline(flip(B.rivers), Object.assign({ weight: 1, color: tok("--water-map") }, o)).addTo(map);
   }
   map.getContainer().style.background = tok("--sea");
   drawBasemap();
 
-  const layers = {
-    "Схема": L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-      subdomains: "abcd", maxZoom: 19, attribution: "© OpenStreetMap, © CARTO" }),
-    "Спутник": L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
-      maxZoom: 18, attribution: "© Esri" })
+  // ---------- Подложки: у каждой есть запасные источники ----------
+  const ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services/";
+  const BASES = {
+    scheme: { name: "Схема", src: [
+      { url: ESRI + "World_Street_Map/MapServer/tile/{z}/{y}/{x}", o: { maxZoom: 19, attribution: "© Esri, HERE, OpenStreetMap" } },
+      { url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png", o: { maxZoom: 19, attribution: "© OpenStreetMap" } },
+      { url: "https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png", o: { subdomains: "abc", maxZoom: 19, attribution: "© OpenStreetMap France" } },
+      { url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", o: { subdomains: "abcd", maxZoom: 19, attribution: "© OpenStreetMap, © CARTO" } }
+    ] },
+    topo: { name: "Рельеф", src: [
+      { url: ESRI + "World_Topo_Map/MapServer/tile/{z}/{y}/{x}", o: { maxZoom: 19, attribution: "© Esri" } },
+      { url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", o: { subdomains: "abc", maxZoom: 17, attribution: "© OpenTopoMap, © OpenStreetMap" } }
+    ] },
+    sat: { name: "Спутник", src: [
+      { url: ESRI + "World_Imagery/MapServer/tile/{z}/{y}/{x}", o: { maxZoom: 19, attribution: "© Esri" } }
+    ], labels: ESRI + "Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}" }
   };
-  let layerName = store.get("kk_layer") || "Схема";
-  layers[layerName].addTo(map);
-  $("#btnLayer").textContent = layerName === "Схема" ? "Спутник" : "Схема";
-  $("#btnLayer").onclick = () => {
-    map.removeLayer(layers[layerName]);
-    layerName = layerName === "Схема" ? "Спутник" : "Схема";
-    layers[layerName].addTo(map);
-    store.set("kk_layer", layerName);
-    $("#btnLayer").textContent = layerName === "Схема" ? "Спутник" : "Схема";
+  let baseKey = store.get("kk_base") || "scheme";
+  if (!BASES[baseKey]) baseKey = "scheme";
+  let baseLayer = null, labelLayer = null, srcIdx = 0;
+  function setBase(key, idx) {
+    baseKey = key; srcIdx = idx || 0;
+    store.set("kk_base", key);
+    if (baseLayer) map.removeLayer(baseLayer);
+    if (labelLayer) { map.removeLayer(labelLayer); labelLayer = null; }
+    const B = BASES[key], s = B.src[srcIdx];
+    baseLayer = L.tileLayer(s.url, Object.assign({ keepBuffer: 4, updateWhenZooming: false, crossOrigin: false }, s.o)).addTo(map);
+    if (B.labels) labelLayer = L.tileLayer(B.labels, { maxZoom: 19, pane: "overlayPane", opacity: .9 }).addTo(map);
+    // если источник не отвечает — переключаемся на запасной
+    let ok = 0, bad = 0;
+    const lay = baseLayer;
+    lay.on("tileload", () => { ok++; });
+    lay.on("tileerror", () => {
+      bad++;
+      if (lay === baseLayer && ok === 0 && bad >= 4 && srcIdx < B.src.length - 1) {
+        setBase(key, srcIdx + 1);
+        if (!window.FISH_DEMO) setStatus("Основная карта не отвечает — включил запасной источник.");
+        setTimeout(() => setStatus(""), 4000);
+      }
+    });
+    document.querySelectorAll("#layersPanel [name=base]").forEach(r => r.checked = r.value === key);
+  }
+  setBase(baseKey);
+
+  // ---------- Наложения: глубины, знаки, ямы ----------
+  const OSM_DEPTH = "https://depth.openseamap.org/geoserver/openseamap/wms";
+  const OVER = {
+    sonar: { name: "Глубины по эхолотам (OpenSeaMap)", note: "Промеры глубин, которые записали эхолоты лодок, и изобаты. Есть не везде — где плавали участники проекта. Видно при приближении.",
+      make: () => L.layerGroup([
+        L.tileLayer.wms(OSM_DEPTH, { layers: "openseamap:contour2,openseamap:contour", format: "image/png", transparent: true, version: "1.1.0", minZoom: 8, maxZoom: 20, attribution: "Глубины © OpenSeaMap" }),
+        L.tileLayer.wms(OSM_DEPTH, { layers: "openseamap:tracks_10m", format: "image/png", transparent: true, version: "1.1.0", minZoom: 10, maxZoom: 20 })
+      ]) },
+    gebco: { name: "Рельеф дна морей (GEBCO)", note: "Глубины морей и больших озёр: цвет показывает глубину.",
+      make: () => L.tileLayer.wms("https://geoserver.openseamap.org/geoserver/gwc/service/wms", { layers: "gebco2021:gebco_2021", format: "image/png", transparent: true, version: "1.1.1", opacity: .65, attribution: "GEBCO" }) },
+    seamark: { name: "Фарватеры, бакены, знаки", note: "Навигационные знаки OpenSeaMap: где судоходный ход и бровки.",
+      make: () => L.tileLayer("https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png", { maxZoom: 18, minZoom: 9, attribution: "© OpenSeaMap" }) },
+    pits: { name: "Зимовальные ямы (Двина, Вычегда)", note: "Глубокие ямы, где зимует рыба. Ловля на них запрещена с 1 октября до ледохода.", make: makePits }
   };
-  const depthLayer = L.tileLayer.wms("https://wms.gebco.net/mapserv?", { layers: "GEBCO_LATEST", format: "image/png", transparent: true, opacity: .55, attribution: "Глубины: GEBCO" });
-  $("#btnDepth").onclick = () => {
-    const on = map.hasLayer(depthLayer);
-    on ? map.removeLayer(depthLayer) : depthLayer.addTo(map);
-    $("#btnDepth").classList.toggle("on", !on);
-    if (!on) setStatus("Глубины морей (GEBCO). Глубины озёр и рек — в карточке каждого места.", false), setTimeout(() => setStatus(""), 5000);
-  };
-  $("#btnZoomIn").onclick = () => map.zoomIn();
-  $("#btnZoomOut").onclick = () => map.zoomOut();
+  const overOn = new Set(store.get("kk_over") || ["pits"]);
+  const overLayers = {};
+  function setOver(k, on) {
+    if (on) { if (!overLayers[k]) overLayers[k] = OVER[k].make(); overLayers[k].addTo(map); overOn.add(k); }
+    else { if (overLayers[k]) map.removeLayer(overLayers[k]); overOn.delete(k); }
+    store.set("kk_over", [...overOn]);
+    const cb = document.querySelector(`#layersPanel [data-over="${k}"]`); if (cb) cb.checked = on;
+    $("#btnLayers").classList.toggle("on", overOn.size > (overOn.has("pits") ? 1 : 0));
+  }
+  function makePits() {
+    const g = L.layerGroup();
+    (window.PITS || []).forEach(p => {
+      L.marker([p.lat, p.lon], { icon: L.divIcon({ className: "", html: '<div class="pit" title="Зимовальная яма"></div>', iconSize: [18, 18], iconAnchor: [9, 9] }), keyboard: false })
+        .bindPopup(`<div class="pop"><b>${esc(p.n)}</b><span>${esc(p.river)}, ${esc(p.km)} км от устья</span><span>Глубокое место, где зимует рыба. <b>Ловля запрещена с 1 октября до ледохода.</b></span><small>Положение примерное (±5–10 км), по Правилам рыболовства, приказ № 292.</small></div>`, { className: "kk-pop" })
+        .addTo(g);
+    });
+    return g;
+  }
+  // панель слоёв
+  const lp = $("#layersPanel");
+  lp.innerHTML = `<div class="lphead"><h3>Слои карты</h3><button type="button" class="x" id="lpClose" aria-label="Закрыть">×</button></div>
+    <div class="lpbase">${Object.entries(BASES).map(([k, b]) => `<label><input type="radio" name="base" value="${k}"${k === baseKey ? " checked" : ""}><span>${b.name}</span></label>`).join("")}</div>
+    <h4>Глубины и вода</h4>
+    ${Object.entries(OVER).map(([k, o]) => `<label class="lpover"><input type="checkbox" data-over="${k}"${overOn.has(k) ? " checked" : ""}><span><b>${o.name}</b><small>${o.note}</small></span></label>`).join("")}
+    <a class="ghost lpnav" href="https://webapp.navionics.com/" target="_blank" rel="noopener">Открыть карту глубин Navionics ›</a>
+    <p class="hint">Navionics (Garmin) строит карты глубин по эхолотам, но они закрытые — их можно смотреть только в их приложении.</p>`;
+  lp.querySelectorAll("[name=base]").forEach(r => r.onchange = () => setBase(r.value));
+  lp.querySelectorAll("[data-over]").forEach(c => c.onchange = () => setOver(c.dataset.over, c.checked));
+  $("#lpClose").onclick = () => { lp.hidden = true; };
+  $("#btnLayers").onclick = () => { lp.hidden = !lp.hidden; };
+  map.on("movestart", () => { if (!lp.hidden && window.innerWidth < 900) lp.hidden = true; });
+  overOn.forEach(k => OVER[k] && setOver(k, true));
+  window.__showDepth = (lat, lon) => { setOver("sonar", true); setOver("seamark", true); map.setView([lat, lon], 13); };
 
   const markers = {};
   function markerIcon(spot) {
@@ -87,7 +155,7 @@
     const fav = state.favs.has(spot.id);
     return L.divIcon({
       className: "",
-      html: `<div class="pin r${st}${spot.my ? " my" : ""}${dim ? " dim" : ""}${fav ? " fav" : ""}${state.current && state.current.id === spot.id ? " sel" : ""}"><span>${st || "·"}</span></div>`,
+      html: `<div class="pin r${st}${spot.my ? " my" : ""}${spot.approx ? " approx" : ""}${dim ? " dim" : ""}${fav ? " fav" : ""}${state.current && state.current.id === spot.id ? " sel" : ""}"><span>${st || "·"}</span></div>`,
       iconSize: [30, 38], iconAnchor: [15, 36]
     });
   }
@@ -242,23 +310,65 @@
 
   // ---------------- Нижняя панель ----------------
   const sheet = $("#sheet"), body = $("#sheetBody");
+  // Панель: три положения — «peek» (видно начало), «half», «full»; тянется за пальцем
+  const PEEK = 200;
+  let pos = "peek";
+  function sheetY(p) {
+    const H = sheet.offsetHeight || window.innerHeight * .8;
+    return p === "full" ? 0 : p === "half" ? Math.round(H * .45) : Math.max(0, H - PEEK);
+  }
+  function setPos(p, instant) {
+    pos = p;
+    sheet.classList.toggle("open", p !== "peek");
+    sheet.dataset.pos = p;
+    if (window.innerWidth >= 900) { sheet.style.transform = ""; return; }
+    sheet.style.transition = instant ? "none" : "";
+    sheet.style.transform = `translateY(${sheetY(p)}px)`;
+  }
   function setSheet(mode, expanded) {
     state.sheet = mode;
     sheet.dataset.mode = mode;
-    sheet.classList.toggle("open", !!expanded);
+    setPos(expanded === true ? "full" : expanded === "half" ? "half" : "peek");
   }
-  $("#handle").onclick = () => sheet.classList.toggle("open");
-  // перетаскивание
-  (function () {
-    let y0 = null, dy = 0;
-    const h = $("#handle");
-    h.addEventListener("touchstart", e => { y0 = e.touches[0].clientY; dy = 0; }, { passive: true });
-    h.addEventListener("touchmove", e => { if (y0 != null) dy = e.touches[0].clientY - y0; }, { passive: true });
-    h.addEventListener("touchend", () => {
-      if (Math.abs(dy) > 30) sheet.classList.toggle("open", dy < 0);
+  window.addEventListener("resize", () => setPos(pos, true));
+  (function dragSheet() {
+    let y0 = null, t0 = 0, base = 0, dy = 0, fromBody = false, moved = false;
+    const start = (e, isBody) => {
+      if (window.innerWidth >= 900) return;
+      if (isBody && (pos !== "full" || body.scrollTop > 0)) return;
+      y0 = e.touches[0].clientY; t0 = Date.now(); base = sheetY(pos); dy = 0; fromBody = isBody; moved = false;
+    };
+    const move = e => {
+      if (y0 == null) return;
+      dy = e.touches[0].clientY - y0;
+      if (fromBody && dy < 0) { y0 = null; return; }
+      if (Math.abs(dy) > 6) moved = true;
+      if (!moved) return;
+      if (fromBody) e.preventDefault();
+      sheet.style.transition = "none";
+      sheet.style.transform = `translateY(${Math.max(0, base + dy)}px)`;
+    };
+    const end = () => {
+      if (y0 == null) return;
       y0 = null;
-    });
+      if (!moved) return;
+      const v = dy / Math.max(1, Date.now() - t0); // скорость
+      const cur = Math.max(0, base + dy);
+      const order = ["full", "half", "peek"];
+      let next;
+      if (Math.abs(v) > .5) next = order[Math.min(2, Math.max(0, order.indexOf(pos) + (v > 0 ? 1 : -1)))];
+      else next = order.map(p => [p, Math.abs(sheetY(p) - cur)]).sort((a, b) => a[1] - b[1])[0][0];
+      sheet.style.transition = "";
+      setPos(next);
+    };
+    const h = $("#handle");
+    h.addEventListener("touchstart", e => start(e, false), { passive: true });
+    body.addEventListener("touchstart", e => start(e, true), { passive: true });
+    document.addEventListener("touchmove", move, { passive: false });
+    document.addEventListener("touchend", end);
+    h.onclick = () => { if (!moved) setPos(pos === "peek" ? "half" : pos === "half" ? "full" : "peek"); };
   })();
+  map.on("click", () => { if (pos === "full") setPos("half"); });
 
   function rerenderSheet() {
     if (state.sheet === "form") return;
@@ -280,7 +390,7 @@
   }
   const fmtKm = km => km < 10 ? km.toFixed(1) + " км" : Math.round(km).toLocaleString("ru-RU") + " км";
 
-  function showList() { if (state.sheet !== "list") { state.current = null; drawMarkers(); } setSheet("list", sheet.classList.contains("open")); renderList(); }
+  function showList() { if (state.sheet !== "list") { state.current = null; drawMarkers(); } setSheet("list", pos === "full" ? true : pos === "half" ? "half" : false); renderList(); }
 
   function renderList() {
     let list = ALL().filter(matches).map(s => ({ s, r: rating(s.id, state.day), d: state.me ? distKm(state.me, s) : null }));
@@ -462,6 +572,7 @@
       <button type="button" class="back" id="back" aria-label="Назад к списку">‹ Все места</button>
       <h2>${esc(s.n)}</h2>
       <p class="meta">${s.my ? '<span class="tag mine">Моё место</span>' : ""}${s.w ? `<span class="tag">${WATER[s.w]}</span>` : ""}${s.tide ? '<span class="tag tide">Приливы</span>' : ""}<span>${esc(s.r)}</span>${state.me ? `<span>${fmtKm(distKm(state.me, s))} от вас</span>` : ""}</p>
+      ${s.approx ? `<p class="approx">Точка на карте примерная — ориентируйтесь по описанию дороги в разделе «Маршрут».</p>` : ""}
       ${s.d ? `<p class="desc">${esc(s.d)}</p>` : ""}
       ${s.my && s.note ? `<div class="note"><small>Мои заметки</small><p>${esc(s.note).replace(/\n/g, "<br>")}</p></div>` : ""}
       <div class="acts">
@@ -569,8 +680,10 @@
     const dc = el("section", "card");
     dc.innerHTML = `<h3>Глубины</h3>` + (dep ? `<div class="depnums"><div><small>Средняя</small><b>≈ ${String(dep.avg).replace(".", ",")} м</b></div><div><small>Максимальная</small><b>≈ ${String(dep.max).replace(".", ",")} м</b></div></div><p>${esc(dep.t)}</p>` : `<p>Для своей точки глубины неизвестны. Промерьте дно — как это сделать, смотрите во вкладке «Советы».</p>`)
       + (window.TIPS ? TIPS.profileSvg(s.w === "river" ? "river" : "lake") : "")
-      + `<p class="hint">Схема показывает, где обычно стоит рыба на таком водоёме. Это не точная карта дна.</p>`;
+      + `<p class="hint">Схема показывает, где обычно стоит рыба на таком водоёме. Это не точная карта дна.</p>`
+      + `<div class="acts"><button type="button" class="ghost" id="depthMap">Глубины по эхолотам на карте</button><a class="ghost" href="https://webapp.navionics.com/" target="_blank" rel="noopener">Navionics ›</a></div>`;
     body.appendChild(dc);
+    dc.querySelector("#depthMap").onclick = () => { setPos("peek"); window.__showDepth(s.lat, s.lon); setStatus("Включены глубины OpenSeaMap и знаки. Если данных нет — здесь ещё никто не записывал промеры."); setTimeout(() => setStatus(""), 6000); };
 
     // Маршрут
     body.appendChild(routeCard(s));
@@ -735,7 +848,7 @@
       km = distKm(a, s);
     }
     map.fitBounds(routeLayer.getBounds(), { padding: [40, 40], paddingBottomRight: [0, 220] });
-    sheet.classList.remove("open");
+    setPos("peek");
 
     const h = mins ? `${Math.floor(mins / 60)} ч ${Math.round(mins % 60)} мин` : "";
     const ya = `https://yandex.ru/maps/?rtext=${a.lat},${a.lon}~${s.lat},${s.lon}&rtt=auto`;
@@ -771,8 +884,9 @@
     const s = $("#status"); s.textContent = t; s.hidden = !t; s.classList.toggle("warn", !!warn);
   }
   function refresh() { drawMarkers(); }
-  $("#btnRefresh").onclick = async () => { Object.keys(rcache).forEach(k => delete rcache[k]); state.tides = {}; await loadAll(true); refresh(); rerenderSheet(); };
-  $("#btnList").onclick = () => { showList(); sheet.classList.add("open"); };
+  $("#btnRefresh").onclick = async () => {
+    const b = $("#btnRefresh"); b.classList.add("spin"); setTimeout(() => b.classList.remove("spin"), 1200); Object.keys(rcache).forEach(k => delete rcache[k]); state.tides = {}; await loadAll(true); refresh(); rerenderSheet(); };
+
 
   window.APP = { openSpot, map, state, showMapTab: () => setTimeout(() => map.invalidateSize(), 50) };
 

@@ -1,3 +1,4 @@
+[hidden] { display: none !important; }
 /* Карта клёва — полноэкранная карта, сверху поиск и дни, снизу выдвижная панель */
 :root {
   --bg: #eef2f0;
@@ -400,3 +401,50 @@ ul.news small { color: var(--ink-2); font-size: 12px; }
 }
 
 .scr > .back { align-self: flex-start; }
+
+/* ---------- Отзывчивость ---------- */
+button, a, summary, label, select, input { touch-action: manipulation; }
+button, .ghost, .chip, .spotrow, .ftile, .day, .sday, .tabs button, details summary { transition: transform .08s ease, background-color .12s ease, opacity .12s; }
+button:active, .ghost:active, .chip:active, .ftile:active, .day:active, .sday:active, details summary:active { transform: scale(.97); opacity: .85; }
+.spotrow:active { background: var(--surface-2); transform: none; }
+.tabs button:active { transform: none; background: var(--surface-2); }
+.screen.enter .scr { animation: scrIn .16s ease-out; }
+@keyframes scrIn { from { opacity: .4; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .screen.enter .scr { animation: none; } }
+.sheet { will-change: transform; transition: transform .24s cubic-bezier(.2,.8,.2,1); }
+.body { -webkit-overflow-scrolling: touch; }
+.fishgrid li { content-visibility: auto; contain-intrinsic-size: 220px; }
+
+/* кнопки карты — иконки */
+.fab { gap: 10px; }
+.fab button { width: 48px; height: 48px; min-width: 0; padding: 0; display: grid; place-items: center; }
+.fab svg { width: 24px; height: 24px; fill: none; stroke: var(--ink); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.fab button.on { background: var(--deep); } .fab button.on svg { stroke: var(--surface); }
+.fab button.spin svg { animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* панель слоёв */
+.layers { position: absolute; z-index: 1250; right: max(12px, env(safe-area-inset-right, 0px)); top: 50%; transform: translateY(-50%);
+  width: min(340px, calc(100% - 24px)); max-height: 70%; overflow-y: auto; background: var(--surface); border-radius: 16px; box-shadow: var(--shadow); padding: 14px; display: grid; gap: 10px; }
+.lphead { display: flex; justify-content: space-between; align-items: center; }
+.lphead h3 { margin: 0; }
+.x { border: 0; background: var(--surface-2); width: 34px; height: 34px; border-radius: 50%; font-size: 20px; line-height: 1; }
+.lpbase { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.lpbase label { position: relative; }
+.lpbase input { position: absolute; opacity: 0; }
+.lpbase span { display: block; text-align: center; border: 1px solid var(--line); border-radius: 10px; padding: 9px 4px; font-weight: 600; font-size: 13px; }
+.lpbase input:checked + span { background: var(--deep); border-color: var(--deep); color: var(--surface); }
+.lpbase input:focus-visible + span { outline: 2px solid var(--accent); }
+.lpover { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: start; padding: 8px 0; border-top: 1px solid var(--line); }
+.lpover input { width: 20px; height: 20px; margin-top: 2px; accent-color: var(--accent); }
+.lpover span { display: grid; gap: 2px; }
+.lpover small { color: var(--ink-2); font-size: 12px; line-height: 1.3; }
+.lpnav { text-align: center; }
+.layers h4 { margin: 4px 0 0; }
+.pit { width: 18px; height: 18px; transform: rotate(45deg); background: #1d3f7a; border: 2px solid #fff; border-radius: 3px; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
+.pop span, .pop small { display: block; font-size: 12.5px; }
+.pop small { color: var(--ink-2); }
+body:not([data-tab="map"]) .layers { display: none; }
+
+.approx { font-size: 12.5px; color: var(--ink-2); background: var(--surface-2); border-left: 3px solid var(--r3); border-radius: 6px; padding: 6px 10px; }
+.pin.approx::before { border-style: dashed; }

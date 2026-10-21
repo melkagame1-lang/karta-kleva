@@ -171,7 +171,13 @@
   function rng(seed) { let s = 0; for (const c of seed) s = (s * 31 + c.charCodeAt(0)) >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
 
   const X0 = 16, X1 = 190, CY = 50;
+  const memo = {};
   function draw(id, cls) {
+    const k = id + "|" + (cls || "");
+    if (memo[k]) return memo[k];
+    return (memo[k] = drawRaw(id, cls));
+  }
+  function drawRaw(id, cls) {
     const P = S[id];
     if (!P) return "";
     if (P.flat) return drawFlat(id, P, cls);
@@ -206,7 +212,7 @@
     else tailD = `M${X1 - 2} ${CY - py} C${tx + 4} ${CY - ty * 1.3} ${tx + 4} ${CY + ty * 1.3} ${X1 - 2} ${CY + py} Z`;
     back += `<path d="${tailD}" fill="${tc}" stroke="${out}" stroke-width=".8"/>`;
     // лучи хвоста
-    for (let i = -3; i <= 3; i++) back += `<line x1="${X1}" y1="${CY + i * py / 4}" x2="${tx - 6}" y2="${CY + i * ty / 3.6}" stroke="${out}" stroke-width=".4" opacity=".5"/>`;
+    if (false) for (let i = -3; i <= 3; i++) back += `<line x1="${X1}" y1="${CY + i * py / 4}" x2="${tx - 6}" y2="${CY + i * ty / 3.6}" stroke="${out}" stroke-width=".4" opacity=".5"/>`;
     if (P.tailSpots) for (let i = 0; i < 9; i++) back += `<ellipse cx="${X1 + 8 + R() * 18}" cy="${CY + (R() - .5) * ty * 1.4}" rx="2" ry="1.3" fill="#1a1e22"/>`;
 
     // Плавники
@@ -227,7 +233,7 @@
           d += ` L${x2} ${y2} Z`;
         } else d = `M${x1} ${y1} L${x1 + w * .15} ${y1 - fn.hg} L${x2 - w * .1} ${y2 - fn.hg * .55} L${x2} ${y2} Z`;
         back += `<path d="${d}" fill="${c}" stroke="${out}" stroke-width=".7"/>`;
-        if (fn.dots) { const dc = fn.dotCol || "#1e1e1a"; for (let i = 0; i < Math.round(w / 3.5); i++) back += `<circle cx="${(x1 + 3 + R() * (w - 4)).toFixed(1)}" cy="${(y1 - 2 - R() * fn.hg * .7).toFixed(1)}" r="${(.8 + R() * .8).toFixed(1)}" fill="${dc}" opacity=".8"/>`; }
+        if (fn.dots && false) { const dc = fn.dotCol || "#1e1e1a"; for (let i = 0; i < Math.round(w / 3.5); i++) back += `<circle cx="${(x1 + 3 + R() * (w - 4)).toFixed(1)}" cy="${(y1 - 2 - R() * fn.hg * .7).toFixed(1)}" r="${(.8 + R() * .8).toFixed(1)}" fill="${dc}" opacity=".8"/>`; }
         if (fn.spot) back += `<ellipse cx="${x2 - w * .18}" cy="${y2 - fn.hg * .45}" rx="${w * .1}" ry="${fn.hg * .25}" fill="#1a1a14"/>`;
       } else if (fn.k === "a") {
         const y1 = bot(fn.s) - 1.5, y2 = bot(fn.e) - 1.5;
@@ -243,7 +249,7 @@
     // Узоры на теле (обрезаются по контуру)
     (P.marks || []).forEach(mk => {
       if (mk.k === "spots" || mk.k === "xspots" || mk.k === "mottle") {
-        const n = mk.n || 20;
+        const n = Math.min(mk.n || 20, 14);
         for (let i = 0; i < n; i++) {
           let t = .12 + R() * .82;
           let lo = 0, hi = 1;
@@ -263,6 +269,7 @@
           marks += `<path d="M${xt(t)} ${top(t) - 2} L${xt(t + w)} ${top(t + w) - 2} L${xt(t + w * .6)} ${CY + f(t) * .55} L${xt(t)} ${CY + f(t) * .5} Z" fill="${mk.col}" opacity="${mk.op}"/>`;
         }
       } else if (mk.k === "scales") {
+        return; // чешуя не рисуется — так рисунок лёгкий
         const st = mk.big ? 7 : 5;
         for (let x = X0 + 34; x < X1 - 6; x += st) for (let y = CY - 40; y < CY + 40; y += st * .8) {
           const off = (Math.round((y - CY) / (st * .8)) % 2) * st / 2;

@@ -10,10 +10,11 @@
   function show(tab) {
     document.body.dataset.tab = tab;
     tabs.forEach(b => { const on = b.dataset.tab === tab; b.classList.toggle("on", on); b.setAttribute("aria-selected", on); });
+    ["fishScreen", "rulesScreen", "tipsScreen"].forEach(id => { const el = document.getElementById(id); const on = id === tab + "Screen"; if (on && el.hidden) { el.classList.remove("enter"); void el.offsetWidth; el.classList.add("enter"); } });
     $("#fishScreen").hidden = tab !== "fish";
     $("#tipsScreen").hidden = tab !== "tips";
     $("#rulesScreen").hidden = tab !== "rules";
-    if (tab === "rules") renderRules();
+    if (tab === "rules") { const d = new Date().toDateString(); if ($("#rulesScreen").dataset.day !== d) { $("#rulesScreen").dataset.day = d; renderRules(); } }
     if (tab === "map" && window.APP) APP.showMapTab();
     if (tab === "fish" && !$("#fishScreen").dataset.ready) renderFishList();
     if (tab === "tips" && !$("#tipsScreen").dataset.ready) renderTips();
@@ -36,9 +37,13 @@
         <b>${FISH[id].n}</b><small>${FISH[id].pred ? "хищник" : "мирная"} · ${esc(FISHART.LOOK[id] ? FISHART.LOOK[id][1] : "")}</small></button></li>`).join("")}</ul>
       ${window.FISH_DEMO ? `<p class="foot">В этом предпросмотре нет интернета, поэтому вместо фотографий показаны схемы. В приложении на телефоне загрузятся настоящие фото.</p>` : `<p class="foot">Фото — iNaturalist и Wikimedia Commons, свободные лицензии; автор указан под каждым снимком.</p>`}`;
     const qi = $("#fishQ");
-    qi.oninput = () => { const v = qi.value; renderFishList(v); const n = $("#fishQ"); n.focus(); n.setSelectionRange(v.length, v.length); };
+    qi.oninput = () => {
+      const v = qi.value.trim().toLowerCase();
+      box.querySelectorAll(".fishgrid li").forEach(li => { li.hidden = !!v && !FISH[li.firstElementChild.dataset.id].n.toLowerCase().includes(v); });
+    };
     box.querySelectorAll(".ftile").forEach(b => b.onclick = () => openFish(b.dataset.id));
-    box.querySelectorAll(".fimg").forEach(n => photoInto(n, n.dataset.fish));
+    const io = "IntersectionObserver" in window ? new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { io.unobserve(e.target); photoInto(e.target, e.target.dataset.fish); } }), { root: box, rootMargin: "200px" }) : null;
+    box.querySelectorAll(".fimg").forEach(n => io ? io.observe(n) : photoInto(n, n.dataset.fish));
     $("#dlPhotos").onclick = async () => {
       const b = $("#dlPhotos");
       if (window.FISH_DEMO) { b.textContent = "В предпросмотре недоступно"; return; }
@@ -56,6 +61,7 @@
   }
 
   async function openFish(id) {
+    if (document.body.dataset.tab === "fish" && fs().querySelector(".fishgrid")) $("#fishScreen").dataset.y = fs().scrollTop;
     show("fish");
     const f = FISH[id], look = FISHART.LOOK[id] || ["", ""];
     const box = fs();
@@ -74,7 +80,7 @@
         <p class="hint">Чем выше столбик, тем лучше клюёт в этом месяце. Оранжевая буква — текущий месяц.</p></section>
       <section class="card"><h3>Где ловить</h3>${spots.length ? `<ul class="spotlinks">${spots.map(s => `<li><button type="button" data-id="${s.id}">${esc(s.n)}<small>${esc(s.r)}</small></button></li>`).join("")}</ul>` : "<p>В базе пока нет мест с этой рыбой.</p>"}</section>`;
     box.scrollTop = 0;
-    $("#fBackList").onclick = () => renderFishList();
+    $("#fBackList").onclick = () => { const y = +($("#fishScreen").dataset.y || 0); renderFishList(); fs().scrollTop = y; };
     box.querySelectorAll(".spotlinks button").forEach(b => b.onclick = () => {
       show("map"); const s = window.SPOTS.find(x => x.id === b.dataset.id); if (s && window.APP) APP.openSpot(s);
     });
