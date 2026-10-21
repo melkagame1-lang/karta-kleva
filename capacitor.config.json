@@ -1,0 +1,16 @@
+{
+  "appId": "ru.kartakleva.app",
+  "appName": "Карта клёва",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "backgroundColor": "#eef2f0"
+  },
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    }
+  }
+}

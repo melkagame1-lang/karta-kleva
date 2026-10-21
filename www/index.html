@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#134e4a">
+<title>Карта клёва</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=Unbounded:wght@500;600&display=swap">
+<link rel="stylesheet" href="lib/leaflet.css">
+<link rel="stylesheet" href="style.css">
+<link rel="manifest" href="manifest.webmanifest">
+</head>
+<body>
+<!--APP-->
+<div id="app">
+  <div id="map" aria-label="Карта рыболовных мест"></div>
+
+  <div class="top">
+    <div class="bar">
+      <span class="brand"><svg width="14" height="22" viewBox="0 0 14 22" aria-hidden="true"><path d="M7 0v4" stroke="currentColor" stroke-width="1.5"/><ellipse cx="7" cy="9" rx="5" ry="5.5" fill="#e2531f"/><ellipse cx="7" cy="15" rx="5" ry="5" fill="#fff" stroke="currentColor" stroke-width="1"/><path d="M7 20v2" stroke="currentColor" stroke-width="1.5"/></svg><span class="bt">Клёв</span></span>
+      <input id="search" type="search" placeholder="Место, регион или рыба" aria-label="Поиск" autocomplete="off">
+      <select id="fishFilter" aria-label="Фильтр по рыбе"><option value="">Вся рыба</option></select>
+    </div>
+    <div class="days" id="days" role="group" aria-label="День прогноза"></div>
+    <div id="status" role="status" hidden></div>
+  </div>
+
+  <div class="fab">
+    <button type="button" id="btnZoomIn" class="big" aria-label="Приблизить">+</button>
+    <button type="button" id="btnZoomOut" class="big" aria-label="Отдалить">−</button>
+    <button type="button" id="btnMe" aria-label="Где я">Я</button>
+    <button type="button" id="btnLayer">Спутник</button>
+    <button type="button" id="btnDepth">Глубины</button>
+    <button type="button" id="btnList">Места</button>
+    <button type="button" id="btnRefresh" aria-label="Обновить погоду">↻</button>
+  </div>
+
+  <section class="sheet" id="sheet" aria-label="Прогноз">
+    <button type="button" class="handle" id="handle" aria-label="Развернуть или свернуть"><i></i></button>
+    <div class="body" id="sheetBody"></div>
+  </section>
+
+  <section class="screen" id="fishScreen" hidden aria-label="Рыбы"><div class="scr"></div></section>
+  <section class="screen" id="rulesScreen" hidden aria-label="Запреты"><div class="scr"></div></section>
+  <section class="screen" id="tipsScreen" hidden aria-label="Советы"><div class="scr"></div></section>
+
+  <nav class="tabs" role="tablist" aria-label="Разделы">
+    <button type="button" role="tab" data-tab="map"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2Zm0 0v14m6-12v14"/></svg>Карта</button>
+    <button type="button" role="tab" data-tab="fish"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12c3-5 9-6 13-2l5-3v10l-5-3c-4 4-10 3-13-2Z"/><circle cx="8" cy="11" r="1"/></svg>Рыбы</button>
+    <button type="button" role="tab" data-tab="rules"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>Запреты</button>
+    <button type="button" role="tab" data-tab="tips"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11a3 3 0 1 1-3-3"/><path d="M12 3c3 1 4 3 4 5"/></svg>Советы</button>
+  </nav>
+</div>
+<!--/APP-->
+<script src="lib/leaflet.js"></script>
+<script src="basemap.js"></script>
+<script src="data.js"></script>
+<script src="forecast.js"></script>
+<script src="fishart.js"></script>
+<script src="photos.js"></script>
+<script src="tips.js"></script>
+<script src="rules.js"></script>
+<!--DEMO-->
+<script src="app.js"></script>
+<script src="ui2.js"></script>
+</body>
+</html>
